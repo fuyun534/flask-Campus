@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>用户管理</h2>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>角色</th>
+                                    <th>状态</th>
+                                    <th>注册时间</th>
+                                    <th>最后登录</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td>
+                                        <select class="form-select form-select-sm role-select" data-user-id="{{ user.id }}">
+                                            <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>管理员</option>
+                                            <option value="user" {% if user.role == 'user' %}selected{% endif %}>普通用户</option>
+                                            <option value="guest" {% if user.role == 'guest' %}selected{% endif %}>访客</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input status-toggle" type="checkbox" 
+                                                   data-user-id="{{ user.id }}"
+                                                   {% if user.is_active %}checked{% endif %}>
+                                            <label class="form-check-label">
+                                                {{ '启用' if user.is_active else '禁用' }}
+                                            </label>
+                                        </div>
+                                    </td>
+                                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>{{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else '从未登录' }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger delete-user" data-user-id="{{ user.id }}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 切换用户状态
+document.querySelectorAll('.status-toggle').forEach(toggle => {
+    toggle.addEventListener('change', function() {
+        const userId = this.dataset.userId;
+        fetch(`/admin/user/${userId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const label = this.nextElementSibling;
+                label.textContent = data.is_active ? '启用' : '禁用';
+            } else {
+                alert('操作失败');
+                this.checked = !this.checked;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('操作失败，请稍后重试');
+            this.checked = !this.checked;
+        });
+    });
+});
+
+// 修改用户角色
+document.querySelectorAll('.role-select').forEach(select => {
+    select.addEventListener('change', function() {
+        const userId = this.dataset.userId;
+        const newRole = this.value;
+        
+        fetch(`/admin/user/${userId}/role`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ role: newRole })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert('修改角色失败');
+                this.value = this.dataset.originalValue;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('修改角色失败，请稍后重试');
+            this.value = this.dataset.originalValue;
+        });
+    });
+});
+
+// 删除用户
+document.querySelectorAll('.delete-user').forEach(button => {
+    button.addEventListener('click', function() {
+        if (!confirm('确定要删除此用户吗？此操作不可恢复。')) {
+            return;
+        }
+        
+        const userId = this.dataset.userId;
+        fetch(`/admin/user/${userId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.closest('tr').remove();
+            } else {
+                alert('删除用户失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('删除用户失败，请稍后重试');
+        });
+    });
+});
+</script>
+{% endblock %} 

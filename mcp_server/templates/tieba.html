@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>校园贴吧</h2>
+                {% if current_user and current_user.role != 'guest' and current_user.is_active %}
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newPostModal">
+                    <i class="bi bi-plus-lg"></i> 发布新帖
+                </button>
+                {% endif %}
+            </div>
+            
+            <div id="posts-container">
+                <!-- 帖子将通过 JavaScript 动态加载 -->
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">热门话题</h5>
+                </div>
+                <div class="card-body">
+                    <div id="hot-topics">
+                        <!-- 热门话题将通过 JavaScript 动态加载 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新帖模态框 -->
+<div class="modal fade" id="newPostModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">发布新帖</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newPostForm">
+                    <div class="mb-3">
+                        <label for="postTitle" class="form-label">标题</label>
+                        <input type="text" class="form-control" id="postTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="postContent" class="form-label">内容</label>
+                        <textarea class="form-control" id="postContent" rows="4" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitPost">发布</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eventSource;
+
+function loadPosts() {
+    fetch('/api/posts')
+        .then(response => response.json())
+        .then(posts => {
+            const container = document.getElementById('posts-container');
+            container.innerHTML = posts.map(post => `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">${post.title}</h5>
+                        <p class="card-text">${post.content}</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                作者: ${post.author} | 发布时间: ${new Date(post.created_at).toLocaleString()}
+                            </small>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary like-btn" data-post-id="${post.id}">
+                                    <i class="bi bi-heart"></i> <span class="likes-count">${post.likes}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // 添加点赞事件监听
+            document.querySelectorAll('.like-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const postId = this.dataset.postId;
+                    fetch(`/api/posts/${postId}/like`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const likesCount = this.querySelector('.likes-count');
+                            likesCount.textContent = parseInt(likesCount.textContent) + 1;
+                        } else {
+                            alert(data.error || '点赞失败');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('点赞失败，请稍后重试');
+                    });
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载帖子失败，请刷新页面重试');
+        });
+}
+
+function loadHotTopics() {
+    fetch('/api/hot-topics')
+        .then(response => response.json())
+        .then(topics => {
+            const container = document.getElementById('hot-topics');
+            container.innerHTML = topics.map(topic => `
+                <div class="mb-2">
+                    <a href="#" class="text-decoration-none">${topic.title}</a>
+                    <small class="text-muted">(${topic.count} 条)</small>
+                </div>
+            `).join('');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+// 初始化 SSE 连接
+function initSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource('/sse/updates');
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.event === 'new_post' || data.event === 'post_liked') {
+            loadPosts();
+            loadHotTopics();
+        }
+    };
+}
+
+// 发布新帖
+document.getElementById('submitPost').addEventListener('click', function() {
+    const title = document.getElementById('postTitle').value;
+    const content = document.getElementById('postContent').value;
+
+    if (!title || !content) {
+        alert('请填写标题和内容');
+        return;
+    }
+
+    fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            title: title,
+            content: content
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 关闭模态框并重置表单
+            const modal = bootstrap.Modal.getInstance(document.getElementById('newPostModal'));
+            modal.hide();
+            document.getElementById('newPostForm').reset();
+            // 重新加载帖子列表
+            loadPosts();
+        } else {
+            alert(data.error || '发布失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('发布失败，请稍后重试');
+    });
+});
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadPosts();
+    loadHotTopics();
+    initSSE();
+});
+</script>
+{% endblock %} 

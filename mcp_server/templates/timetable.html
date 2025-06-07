@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>课表管理</h2>
+                <div>
+                    {% if current_user and current_user.role != 'guest' and current_user.is_active %}
+                    <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addCourseModal">
+                        <i class="bi bi-plus-lg"></i> 添加课程
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-outline-primary" onclick="exportTimetable()">
+                        <i class="bi bi-download"></i> 导出课表
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px">节次/星期</th>
+                            <th>周一</th>
+                            <th>周二</th>
+                            <th>周三</th>
+                            <th>周四</th>
+                            <th>周五</th>
+                            <th>周六</th>
+                            <th>周日</th>
+                        </tr>
+                    </thead>
+                    <tbody id="timetable-body">
+                        <!-- 课表将通过 JavaScript 动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加课程模态框 -->
+<div class="modal fade" id="addCourseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加课程</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addCourseForm">
+                    <div class="mb-3">
+                        <label for="courseName" class="form-label">课程名称</label>
+                        <input type="text" class="form-control" id="courseName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="teacher" class="form-label">教师</label>
+                        <input type="text" class="form-control" id="teacher" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="location" class="form-label">地点</label>
+                        <input type="text" class="form-control" id="location" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="day" class="form-label">周几</label>
+                                <select class="form-select" id="day" required>
+                                    <option value="1">周一</option>
+                                    <option value="2">周二</option>
+                                    <option value="3">周三</option>
+                                    <option value="4">周四</option>
+                                    <option value="5">周五</option>
+                                    <option value="6">周六</option>
+                                    <option value="7">周日</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="period" class="form-label">第几节</label>
+                                <select class="form-select" id="period" required>
+                                    <option value="1">第1节</option>
+                                    <option value="2">第2节</option>
+                                    <option value="3">第3节</option>
+                                    <option value="4">第4节</option>
+                                    <option value="5">第5节</option>
+                                    <option value="6">第6节</option>
+                                    <option value="7">第7节</option>
+                                    <option value="8">第8节</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="weeks" class="form-label">周次</label>
+                        <input type="text" class="form-control" id="weeks" placeholder="例如：1-16周" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="color" class="form-label">颜色</label>
+                        <input type="color" class="form-control form-control-color" id="color" value="#FFB6C1">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitCourse">添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑课程模态框 -->
+<div class="modal fade" id="editCourseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑课程</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCourseForm">
+                    <input type="hidden" id="editCourseId">
+                    <div class="mb-3">
+                        <label for="editCourseName" class="form-label">课程名称</label>
+                        <input type="text" class="form-control" id="editCourseName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTeacher" class="form-label">教师</label>
+                        <input type="text" class="form-control" id="editTeacher" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editLocation" class="form-label">地点</label>
+                        <input type="text" class="form-control" id="editLocation" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editDay" class="form-label">周几</label>
+                                <select class="form-select" id="editDay" required>
+                                    <option value="1">周一</option>
+                                    <option value="2">周二</option>
+                                    <option value="3">周三</option>
+                                    <option value="4">周四</option>
+                                    <option value="5">周五</option>
+                                    <option value="6">周六</option>
+                                    <option value="7">周日</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editPeriod" class="form-label">第几节</label>
+                                <select class="form-select" id="editPeriod" required>
+                                    <option value="1">第1节</option>
+                                    <option value="2">第2节</option>
+                                    <option value="3">第3节</option>
+                                    <option value="4">第4节</option>
+                                    <option value="5">第5节</option>
+                                    <option value="6">第6节</option>
+                                    <option value="7">第7节</option>
+                                    <option value="8">第8节</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editWeeks" class="form-label">周次</label>
+                        <input type="text" class="form-control" id="editWeeks" placeholder="例如：1-16周" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editColor" class="form-label">颜色</label>
+                        <input type="color" class="form-control form-control-color" id="editColor">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="updateCourse">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eventSource;
+
+function loadTimetable() {
+    fetch('/api/timetable')
+        .then(response => response.json())
+        .then(courses => {
+            const timetable = Array(8).fill().map(() => Array(7).fill(null));
+            
+            courses.forEach(course => {
+                const day = course.day - 1;
+                const period = course.period - 1;
+                timetable[period][day] = course;
+            });
+
+            const tbody = document.getElementById('timetable-body');
+            tbody.innerHTML = '';
+
+            for (let period = 0; period < 8; period++) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>第${period + 1}节</td>`;
+                
+                for (let day = 0; day < 7; day++) {
+                    const cell = document.createElement('td');
+                    const course = timetable[period][day];
+                    
+                    if (course) {
+                        cell.innerHTML = `
+                            <div class="course-card" style="background-color: ${course.color}">
+                                <div class="course-name">${course.name}</div>
+                                <div class="course-info">
+                                    <small>${course.teacher}</small><br>
+                                    <small>${course.location}</small><br>
+                                    <small>${course.weeks}</small>
+                                </div>
+                                {% if current_user and current_user.role != 'guest' and current_user.is_active %}
+                                <div class="course-actions">
+                                    <button class="btn btn-sm btn-outline-light edit-btn" data-course-id="${course.id}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light delete-btn" data-course-id="${course.id}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+                        `;
+                    }
+                    
+                    row.appendChild(cell);
+                }
+                
+                tbody.appendChild(row);
+            }
+
+            // 添加编辑和删除按钮的事件监听
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const courseId = this.dataset.courseId;
+                    showEditModal(courseId);
+                });
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const courseId = this.dataset.courseId;
+                    if (confirm('确定要删除这门课程吗？')) {
+                        deleteCourse(courseId);
+                    }
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载课表失败，请刷新页面重试');
+        });
+}
+
+function showEditModal(courseId) {
+    fetch(`/api/courses/${courseId}`)
+        .then(response => response.json())
+        .then(course => {
+            document.getElementById('editCourseId').value = course.id;
+            document.getElementById('editCourseName').value = course.name;
+            document.getElementById('editTeacher').value = course.teacher;
+            document.getElementById('editLocation').value = course.location;
+            document.getElementById('editDay').value = course.day;
+            document.getElementById('editPeriod').value = course.period;
+            document.getElementById('editWeeks').value = course.weeks;
+            document.getElementById('editColor').value = course.color;
+
+            const modal = new bootstrap.Modal(document.getElementById('editCourseModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载课程信息失败');
+        });
+}
+
+function deleteCourse(courseId) {
+    fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadTimetable();
+        } else {
+            alert(data.error || '删除失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('删除失败，请稍后重试');
+    });
+}
+
+function exportTimetable() {
+    window.location.href = '/api/timetable/export/csv';
+}
+
+// 初始化 SSE 连接
+function initSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource('/sse/updates');
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.event === 'course_added' || data.event === 'course_updated' || data.event === 'course_deleted') {
+            loadTimetable();
+        }
+    };
+}
+
+// 添加课程
+document.getElementById('submitCourse').addEventListener('click', function() {
+    const courseData = {
+        name: document.getElementById('courseName').value,
+        teacher: document.getElementById('teacher').value,
+        location: document.getElementById('location').value,
+        day: document.getElementById('day').value,
+        period: document.getElementById('period').value,
+        weeks: document.getElementById('weeks').value,
+        color: document.getElementById('color').value
+    };
+
+    fetch('/api/timetable', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(courseData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addCourseModal'));
+            modal.hide();
+            document.getElementById('addCourseForm').reset();
+            loadTimetable();
+        } else {
+            alert(data.error || '添加失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('添加失败，请稍后重试');
+    });
+});
+
+// 更新课程
+document.getElementById('updateCourse').addEventListener('click', function() {
+    const courseId = document.getElementById('editCourseId').value;
+    const courseData = {
+        name: document.getElementById('editCourseName').value,
+        teacher: document.getElementById('editTeacher').value,
+        location: document.getElementById('editLocation').value,
+        day: document.getElementById('editDay').value,
+        period: document.getElementById('editPeriod').value,
+        weeks: document.getElementById('editWeeks').value,
+        color: document.getElementById('editColor').value
+    };
+
+    fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(courseData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editCourseModal'));
+            modal.hide();
+            loadTimetable();
+        } else {
+            alert(data.error || '更新失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('更新失败，请稍后重试');
+    });
+});
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadTimetable();
+    initSSE();
+});
+</script>
+
+<style>
+.course-card {
+    padding: 10px;
+    border-radius: 5px;
+    color: white;
+    margin: 2px;
+    position: relative;
+}
+
+.course-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.course-info {
+    font-size: 0.8em;
+}
+
+.course-actions {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: none;
+}
+
+.course-card:hover .course-actions {
+    display: block;
+}
+
+.course-actions .btn {
+    padding: 0.2rem 0.4rem;
+    margin-left: 2px;
+}
+</style>
+{% endblock %} 
